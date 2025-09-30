@@ -49,7 +49,7 @@ SmartDapp was created to solve these problems by providing:
 ## 📦 Installation
 
 ```bash
-npm install smartdapp
+TODO:not published on npm yet
 ```
 
 ## 🛠️ Quick Start
