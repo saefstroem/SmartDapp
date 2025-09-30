@@ -1,0 +1,48 @@
+{
+  "name": "smartdapp",
+  "version": "1.0.0",
+  "description": "Quick way to get started with AppKit/dApp development in any framework.",
+  "main": "./dist/index.js",
+  "module": "./dist/index.mjs",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.mjs",
+      "require": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsup",
+    "dev": "tsup --watch",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/saefstroem/SmartDapp.git"
+  },
+  "keywords": [
+    "web3",
+    "dapp",
+    "appkit",
+    "ethereum"
+  ],
+  "author": "",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/saefstroem/SmartDapp/issues"
+  },
+  "homepage": "https://github.com/saefstroem/SmartDapp#readme",
+  "devDependencies": {
+    "tsup": "^8.5.0",
+    "typescript": "^5.9.2"
+  },
+  "dependencies": {
+    "@reown/appkit": "^1.8.8",
+    "@reown/appkit-adapter-ethers": "^1.8.8",
+    "ethers": "^6.15.0"
+  }
+}
