@@ -1,12 +1,12 @@
-import { SmartDappNetworkConfiguration, Web3InteropNotification, Web3InteropService } from "./services/web3Interop";
+import { SmartDappNetworkConfiguration, SmartDappEvent, Web3InteropService } from "./services/web3Interop";
 import { ContractService } from "./services/contract";
 import { StorageService } from "./services/storage";
 import { LocalStorageAdapter } from "./services/localStorage";
 import { AppKitNetwork } from "@reown/appkit/networks";
 
 
-// Re-export SmartDappNetworkConfiguration for external use
-export type { SmartDappNetworkConfiguration };
+// Re-export types for external use
+export type { SmartDappNetworkConfiguration, SmartDappEvent };
 
 export interface SmartDappApiUrl {
     // The production URL for this API
@@ -15,7 +15,7 @@ export interface SmartDappApiUrl {
     port?: number;
 }
 
-export interface SmartDappConfig {
+export interface SmartDappConfig<ApiUrlDescriptor extends Record<any, SmartDappApiUrl> = Record<any, SmartDappApiUrl>> {
     projectId: string;
     appName: string;
     appDescription: string;
@@ -23,7 +23,7 @@ export interface SmartDappConfig {
     appIcon: string;
     abis: Record<any, Object[]>;
     networks: Record<any, SmartDappNetworkConfiguration>;
-    apiUrls: Record<number, Record<any, SmartDappApiUrl>>;
+    apiUrls: Record<number,ApiUrlDescriptor>;
     storageAdapter?: any;
 }
 
@@ -54,16 +54,6 @@ export class SmartDapp {
     }
 
     /**
-     * Get the custom network ID (e.g., 'kasplex-mainnet', 'kasplex-testnet')
-     */
-    public getCurrentCustomNetworkId(): string {
-        const networkId = this.web3InteropService.networkId;
-        if (!networkId) throw new Error("No network selected");
-        if (!this.config.networks[networkId]) throw new Error(`No configuration found for network ID: ${networkId}`);
-        return this.config.networks[networkId].customNetworkId;
-    }
-
-    /**
      * Get all configured networks
      */
     public getNetworks(): AppKitNetwork[] {
@@ -74,7 +64,7 @@ export class SmartDapp {
     /**
      * Subscribe to changes in the SmartDapp. This is the only way to retrieve updates/information.
      */
-    public subscribeToChanges(callback: (notification: Web3InteropNotification) => void): void {
+    public subscribeToChanges(callback: (event: SmartDappEvent) => void): void {
         this.web3InteropService.subscribeToChanges(callback);
     }
 

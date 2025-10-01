@@ -150,21 +150,21 @@ const smartDapp = new SmartDapp(config, false); // false = production mode
 
 ```typescript
 // Subscribe to wallet changes FIRST - this is the only way to get state updates
-smartDapp.subscribeToChanges((notification, data) => {
-  switch (notification) {
+smartDapp.subscribeToChanges((event) => {
+  switch (event.event) {
     case "CONNECTED":
-      console.log("Wallet connected to:", data.address);
+      console.log("Wallet connected to:", event.properties.address);
       // Handle connection state in your UI
       break;
     case "DISCONNECTED":
-      console.log("Wallet disconnected:", data.reason);
+      console.log("Wallet disconnected:", event.properties.reason);
       // Handle disconnection state in your UI
       break;
     case "NETWORK_CHANGED":
-      console.log("Network changed to:", data.chainId);
-      console.log("API URLs for this network:", data.apiUrls);
+      console.log("Network changed to:", event.properties.chainId);
+      console.log("API URLs for this network:", event.properties.apiUrls);
       // Handle network change in your UI
-      // data.apiUrls contains all configured API endpoints for the new network
+      // event.properties.apiUrls contains all configured API endpoints for the new network
       break;
   }
 });
@@ -212,9 +212,8 @@ smartDapp.storeMetadata("storedTokens", [
 const token = await smartDapp.findContentByKeyAndQuery("storedTokens", "USDC");
 console.log("Found token:", token);
 
-// Get API URL for current network
-const marketsApi = smartDapp.getApiUrl("markets");
-console.log("Markets API:", marketsApi);
+// Note: API URLs are now only available through NETWORK_CHANGED events
+// See the event-driven examples above for how to access them
 ```
 
 ## Event-Driven Philosophy
@@ -239,35 +238,54 @@ Instead of getters, SmartDapp provides:
 - **Predictable flow**: Clear event flow makes debugging easier
 - **Better UX**: UI automatically updates when state changes
 - **Network-aware data**: Events include relevant data like API URLs for the current network
+- **Type safety**: Discriminated union types provide compile-time validation and IntelliSense
 
-### Event Types
+### Event Structure
+
+SmartDapp uses discriminated union types for type-safe event handling:
 
 ```typescript
-enum Web3InteropNotification {
-  NETWORK_CHANGED = "NETWORK_CHANGED",    // data = { chainId: number, apiUrls: Record<string, SmartDappApiUrl> }
-  CONNECTED = "CONNECTED",                // data = { address: string }
-  DISCONNECTED = "DISCONNECTED"           // data = { reason?: string }
-}
+export type SmartDappEvent = {
+    event: 'CONNECTED';
+    properties: {
+        address: string;
+    };
+} | {
+    event: 'DISCONNECTED';
+    properties: {
+        reason?: string;
+    };
+} | {
+    event: 'NETWORK_CHANGED';
+    properties: {
+        chainId: number;
+        apiUrls: Record<string, SmartDappApiUrl>;
+    };
+};
 ```
 
-### Event Data Structure
+### Type-Safe Event Handling
+
+With discriminated unions, TypeScript provides excellent IntelliSense and type safety. The clean structure makes it easy to handle events:
 
 ```typescript
-// NETWORK_CHANGED event data
-interface NetworkChangeEventData {
-  chainId: number;
-  apiUrls: Record<string, SmartDappApiUrl>;  // API URLs for the new network
-}
-
-// CONNECTED event data  
-interface ConnectedEventData {
-  address: string;
-}
-
-// DISCONNECTED event data
-interface DisconnectedEventData {
-  reason?: string;
-}
+smartDapp.subscribeToChanges((event) => {
+  switch (event.event) {
+    case 'CONNECTED':
+      // TypeScript knows event.properties.address exists
+      console.log('Connected to:', event.properties.address);
+      break;
+    case 'DISCONNECTED':
+      // TypeScript knows event.properties.reason exists
+      console.log('Disconnected:', event.properties.reason);
+      break;
+    case 'NETWORK_CHANGED':
+      // TypeScript knows event.properties.chainId and event.properties.apiUrls exist
+      console.log('Network changed to:', event.properties.chainId);
+      console.log('API URLs:', event.properties.apiUrls);
+      break;
+  }
+});
 ```
 
 ## Architecture
@@ -296,12 +314,12 @@ SmartDapp
 #### Event-Driven State Management
 ```typescript
 // Subscribe to all state changes - this is the ONLY way to get state updates
-smartDapp.subscribeToChanges(callback)
+smartDapp.subscribeToChanges((event: SmartDappEvent) => void)
 
-// Available events:
-// - "CONNECTED": Wallet connected (data = { address: string })
-// - "DISCONNECTED": Wallet disconnected (data = { reason?: string })
-// - "NETWORK_CHANGED": Network switched (data = { chainId: number, apiUrls: Record<string, SmartDappApiUrl> })
+// Available events with type-safe properties:
+// - "CONNECTED": event.properties.address
+// - "DISCONNECTED": event.properties.reason
+// - "NETWORK_CHANGED": event.properties.chainId, event.properties.apiUrls
 ```
 
 #### Wallet & Network Actions
@@ -316,7 +334,6 @@ await smartDapp.selectNetwork(chainId)
 // Configuration access (read-only, not reactive)
 smartDapp.getCurrentCustomNetworkId()
 smartDapp.getNetworks()
-smartDapp.getApiUrl(name)
 ```
 
 #### Contract Interactions
@@ -340,29 +357,26 @@ smartDapp.createCacheKey(key, ...params)
 
 // Search
 await smartDapp.findContentByKeyAndQuery(key, query)
-
-// API URLs
-smartDapp.getApiUrl(name)
 ```
 
 ## Best Practices
 
 ### Event-Driven State Management
 ```typescript
-// Good: Subscribe to events and manage state reactively
+// Good: Subscribe to events and manage state reactively with type safety
 let currentNetwork: number | null = null;
 let currentAddress: string | null = null;
 let currentApiUrls: Record<string, SmartDappApiUrl> = {};
 
-smartDapp.subscribeToChanges((notification, data) => {
-  switch (notification) {
+smartDapp.subscribeToChanges((event) => {
+  switch (event.event) {
     case "CONNECTED":
-      currentAddress = data.address;
+      currentAddress = event.properties.address; // TypeScript knows this exists
       updateUI();
       break;
     case "NETWORK_CHANGED":
-      currentNetwork = data.chainId;
-      currentApiUrls = data.apiUrls; // Get API URLs for the new network
+      currentNetwork = event.properties.chainId; // TypeScript knows this exists
+      currentApiUrls = event.properties.apiUrls; // TypeScript knows this exists
       updateUI();
       // Now you can use currentApiUrls.backend.url, currentApiUrls.markets.url, etc.
       break;
@@ -419,14 +433,14 @@ const tx = await smartDapp.sendTransaction("Router", "swapExactETHForTokens", ar
 
 ### Network Awareness
 ```typescript
-// Good: Track network state and API URLs through events
+// Good: Track network state and API URLs through events with type safety
 let currentNetwork: number | null = null;
 let currentApiUrls: Record<string, SmartDappApiUrl> = {};
 
-smartDapp.subscribeToChanges((notification, data) => {
-  if (notification === "NETWORK_CHANGED") {
-    currentNetwork = data.chainId;
-    currentApiUrls = data.apiUrls;
+smartDapp.subscribeToChanges((event) => {
+  if (event.event === "NETWORK_CHANGED") {
+    currentNetwork = event.properties.chainId; // TypeScript knows this exists
+    currentApiUrls = event.properties.apiUrls; // TypeScript knows this exists
     handleNetworkChange(currentNetwork, currentApiUrls);
   }
 });

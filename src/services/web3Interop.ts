@@ -9,7 +9,6 @@ import { SmartDappApiUrl } from "..";
 
 export interface SmartDappNetworkConfiguration {
     appKit: AppKitNetwork;
-    customNetworkId: string;
     contracts: Record<any, SmartDappContract>;
     metadata: Record<any, any>;
 }
@@ -22,27 +21,23 @@ export interface AppkitConfiguration {
     projectId: string;
 }
 
-export enum Web3InteropNotification {
-    NETWORK_CHANGED = "NETWORK_CHANGED",
-    CONNECTED = "CONNECTED",
-    DISCONNECTED = "DISCONNECTED",
-}
-
-interface NetworkChangeEventData {
-    chainId: Number,
-    apiUrls: Record<any, SmartDappApiUrl>
-}
-
-
-interface ConnectedEventData {
-    address: string,
-}
-
-interface DisconnectedEventData {
-    reason?: string
-}
-
-export type SmartDappEventData = NetworkChangeEventData | ConnectedEventData | DisconnectedEventData;
+export type SmartDappEvent = {
+    event: 'CONNECTED';
+    properties: {
+        address: string;
+    };
+} | {
+    event: 'DISCONNECTED';
+    properties: {
+        reason?: string;
+    };
+} | {
+    event: 'NETWORK_CHANGED';
+    properties: {
+        chainId: number;
+        apiUrls: Record<string, SmartDappApiUrl>;
+    };
+};
 
 export class Web3InteropService {
     /**
@@ -53,7 +48,7 @@ export class Web3InteropService {
     /**
      * Subscribers to web3 interop changes
      */
-    private subscribers: Set<(web3InteropNotification: Web3InteropNotification, data?: any) => void> = new Set();
+    private subscribers: Set<(event: SmartDappEvent) => void> = new Set();
 
     /**
      * Used to signal whether or not testnet networks should be available for selection
@@ -101,28 +96,40 @@ export class Web3InteropService {
         switch (event.data.event) {
             case "CONNECT_SUCCESS":
                 this.getSigner().then(signer => {
-                    this.notifySubscribers(Web3InteropNotification.CONNECTED, {
-                        address: signer.address
+                    this.notifySubscribers({
+                        event: 'CONNECTED',
+                        properties: {
+                            address: signer.address
+                        }
                     });
                 });
                 break;
             case "DISCONNECT_SUCCESS":
-                this.notifySubscribers(Web3InteropNotification.DISCONNECTED, {
-                    reason: "Disconnected"
+                this.notifySubscribers({
+                    event: 'DISCONNECTED',
+                    properties: {
+                        reason: "Disconnected"
+                    }
                 });
                 break;
             case "SWITCH_NETWORK":
                 const isolatedChainId = event.data.properties.network.replace("eip155:", "");
                 this.networkId = Number(isolatedChainId)
-                this.notifySubscribers(Web3InteropNotification.NETWORK_CHANGED, {
-                    chainId: this.networkId,
-                    apiUrls: this.apiUrls[this.networkId] || {}
+                this.notifySubscribers({
+                    event: 'NETWORK_CHANGED',
+                    properties: {
+                        chainId: this.networkId,
+                        apiUrls: this.apiUrls[this.networkId] || {}
+                    }
                 });
                 break;
             case "SELECT_WALLET":
                 this.getSigner().then(signer => {
-                    this.notifySubscribers(Web3InteropNotification.CONNECTED, {
-                        address: signer.address
+                    this.notifySubscribers({
+                        event: 'CONNECTED',
+                        properties: {
+                            address: signer.address
+                        }
                     });
                 });
                 break;
@@ -133,13 +140,12 @@ export class Web3InteropService {
 
     /**
      * Notify all subscribers of a change
-     * @param notification The notification type
-     * @param data Optional data to send with the notification
+     * @param event The event data to send to subscribers
      */
-    private notifySubscribers(notification: Web3InteropNotification, data: SmartDappEventData) {
+    private notifySubscribers(event: SmartDappEvent) {
         this.subscribers.forEach(callback => {
             try {
-                callback(notification, data);
+                callback(event);
             } catch (err) {
                 console.error("Error in subscriber callback", err);
             }
@@ -196,7 +202,7 @@ export class Web3InteropService {
     /**
      * Subscribe to quick provider changes
      */
-    public subscribeToChanges(callback: (web3InteropNotification: Web3InteropNotification) => void) {
+    public subscribeToChanges(callback: (event: SmartDappEvent) => void) {
         this.subscribers.add(callback);
     }
 
