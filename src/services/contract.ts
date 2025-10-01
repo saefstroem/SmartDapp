@@ -43,7 +43,8 @@ export class ContractService {
         abiName?: string
     ): Promise<any> {
         return new Promise<any>(async (resolve, reject) => {
-            const networkId = this.web3InteropService.getNetworkId();
+            const networkId = this.web3InteropService.networkId;
+            if (!networkId) throw new Error("No network selected");
             let targetAddress: string;
             let abi: Object[];
 
@@ -88,7 +89,8 @@ export class ContractService {
         abiName?: string
     ): Promise<any> {
         return new Promise<any>(async (resolve, reject) => {
-            const networkId = this.web3InteropService.getNetworkId();
+            const networkId = this.web3InteropService.networkId;
+            if (!networkId) throw new Error("No network selected");
             let targetAddress: string;
             let abi: Object[];
 
@@ -139,18 +141,18 @@ export class ContractService {
         abiName?: string
     ): string {
         let abi: Object[];
-
+        const networkId = this.web3InteropService.networkId;
+        if (!networkId) throw new Error("No network selected");
         if (abiName) {
             // Direct ABI name provided
             abi = this.getAbi(contractNameOrAbiName);
         } else {
             // Contract name provided, get its ABI
-            const networkId = this.web3InteropService.getNetworkId();
+
             const contractInfo = this.getContractInfo(networkId, contractNameOrAbiName);
             abi = this.getAbi(contractInfo.name);
         }
 
-        const networkId = this.web3InteropService.getNetworkId();
 
         // For encoding, we need to create a provider from the current network
         const networks = this.web3InteropService.getAvailableNetworks();

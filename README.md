@@ -1,66 +1,73 @@
 # SmartDapp
 
-**A comprehensive, maintainable Web3 development framework that solves common pitfalls in dApp development**
+A comprehensive, maintainable Web3 development framework that solves common pitfalls in dApp development.
 
 SmartDapp is a TypeScript library designed to provide a clean, structured approach to Web3 development. Born from real-world experience building decentralized applications, it addresses the common issues that plague dApp development teams - particularly the chaos that ensues when developers lack proper Web3 and API communication patterns.
 
-## 🎯 Motivation
+## Motivation
 
-During the development of decentralized applications, I identified critical patterns that lead to unmaintainable codebases. The core issues were:
+During the development of decentralized applications, we identified critical patterns that lead to unmaintainable codebases. The core issues were:
 
 - **Misunderstanding of Web3 patterns**: Improper handling of wallet connections, network switching, and contract interactions
 - **Poor API communication**: Lack of structured patterns for handling different networks and environments
 - **Inconsistent state management**: No clear separation between on-chain and off-chain data
+- **Getter abuse**: Developers relying on non-reactive getters instead of proper state management
 - **Maintenance challenges**: Code that works but becomes difficult to understand, debug, or extend over time
 
 SmartDapp was created to solve these problems by providing:
 
-✅ **Structured Web3 interactions** with proper error handling  
-✅ **Network-aware configuration** that scales across environments  
-✅ **Type-safe contract interactions** with clear patterns  
-✅ **Maintainable architecture** that teams can actually work with  
-✅ **Best practices built-in** to prevent common Web3 mistakes  
+- **Event-driven architecture**: Forces developers to use reactive patterns instead of getters
+- **Structured Web3 interactions** with proper error handling
+- **Network-aware configuration** that scales across environments
+- **Type-safe contract interactions** with clear patterns
+- **Maintainable architecture** that teams can actually work with
+- **Best practices built-in** to prevent common Web3 mistakes
 
-## 🚀 Key Features
+## Key Features
 
-### 🔗 **Unified Web3 Interface**
+### Event-Driven Architecture
+- **No Getters**: Removes all getter methods to prevent non-reactive state access
+- **Event-Only Updates**: All state changes are communicated through events
+- **Reactive Patterns**: Forces developers to implement proper state management
+- **Predictable State**: Clear event flow makes debugging and maintenance easier
+
+### Unified Web3 Interface
 - **Wallet Management**: Seamless connection with AppKit integration
 - **Network Switching**: Automatic network detection and switching
 - **Multi-chain Support**: Configure multiple networks with different contracts
 - **Event Subscriptions**: React to wallet and network changes
 
-### 📋 **Contract Management**
+### Contract Management
 - **ABI Organization**: Centralized ABI management with type safety
 - **Contract Registry**: Named contracts with network-specific addresses
 - **Transaction Handling**: Gas estimation and proper transaction flow
 - **Read Operations**: Optimized read calls with provider management
 
-### 🗄️ **Smart Storage**
+### Smart Storage
 - **Network-aware Storage**: Data automatically namespaced by network
 - **Metadata Management**: Store and retrieve application-specific data
 - **Search Capabilities**: Find stored data by any field
 - **Cache Management**: Built-in caching with network-specific keys
 
-### 🌐 **API Integration**
+### API Integration
 - **Environment-aware URLs**: Different API endpoints per network
 - **Type-safe Configuration**: Compile-time validation of API structures
 - **Flexible Backend Integration**: Support for any backend architecture
 
-## 📦 Installation
+## Installation
 
 ```bash
 TODO:not published on npm yet
 ```
 
-## 🛠️ Quick Start
+## Quick Start
 
-### 1. Basic Configuration
+### Basic Configuration
 
 ```typescript
 import { SmartDapp, SmartDappConfig } from 'smartdapp';
 
 const config: SmartDappConfig = {
-  projectId: "your-reown-project-id",
   appName: "My DApp",
   appDescription: "A decentralized application",
   appUrl: "https://mydapp.com",
@@ -139,33 +146,36 @@ const config: SmartDappConfig = {
 const smartDapp = new SmartDapp(config, false); // false = production mode
 ```
 
-### 2. Wallet Connection
+### Wallet Connection
 
 ```typescript
-// Open wallet connection modal
-await smartDapp.openAppKitModal();
-
-// Get connected address
-const address = await smartDapp.getAddress();
-console.log("Connected:", address);
-
-// Subscribe to wallet changes
-smartDapp.subscribeToChanges((notification) => {
+// Subscribe to wallet changes FIRST - this is the only way to get state updates
+smartDapp.subscribeToChanges((notification, data) => {
   switch (notification) {
     case "CONNECTED":
-      console.log("Wallet connected!");
+      console.log("Wallet connected to:", data.address);
+      // Handle connection state in your UI
       break;
     case "DISCONNECTED":
-      console.log("Wallet disconnected!");
+      console.log("Wallet disconnected:", data.reason);
+      // Handle disconnection state in your UI
       break;
     case "NETWORK_CHANGED":
-      console.log("Network changed to:", smartDapp.getNetworkId());
+      console.log("Network changed to:", data.chainId);
+      console.log("API URLs for this network:", data.apiUrls);
+      // Handle network change in your UI
+      // data.apiUrls contains all configured API endpoints for the new network
       break;
   }
 });
+
+// Open wallet connection modal
+await smartDapp.openAppKitModal();
+
+// Note: There are NO getters - you must rely on events for state updates
 ```
 
-### 3. Contract Interactions
+### Contract Interactions
 
 ```typescript
 // Read from contract
@@ -185,7 +195,7 @@ const tx = await smartDapp.sendTransaction("Router", "swapExactETHForTokens", [
 console.log("Transaction hash:", tx.hash);
 ```
 
-### 4. Storage and Metadata
+### Storage and Metadata
 
 ```typescript
 // Store network-specific data
@@ -207,7 +217,60 @@ const marketsApi = smartDapp.getApiUrl("markets");
 console.log("Markets API:", marketsApi);
 ```
 
-## 🏗️ Architecture
+## Event-Driven Philosophy
+
+SmartDapp enforces an event-driven architecture by removing all getter methods. This design decision addresses a critical problem in Web3 development: **developers often rely on non-reactive getters instead of implementing proper state management**.
+
+### Why No Getters?
+
+Traditional Web3 libraries provide getters like `getAddress()` or `getNetworkId()`, but these create several problems:
+
+1. **Non-reactive**: Getters don't automatically update when state changes
+2. **Stale data**: Developers forget to re-fetch data after state changes
+3. **Poor UX**: UI doesn't update when wallet disconnects or network changes
+4. **Debugging nightmare**: Hard to track when and why state becomes inconsistent
+
+### The SmartDapp Solution
+
+Instead of getters, SmartDapp provides:
+
+- **Event subscriptions**: `subscribeToChanges()` is the only way to get state updates
+- **Reactive patterns**: Forces developers to implement proper state management
+- **Predictable flow**: Clear event flow makes debugging easier
+- **Better UX**: UI automatically updates when state changes
+- **Network-aware data**: Events include relevant data like API URLs for the current network
+
+### Event Types
+
+```typescript
+enum Web3InteropNotification {
+  NETWORK_CHANGED = "NETWORK_CHANGED",    // data = { chainId: number, apiUrls: Record<string, SmartDappApiUrl> }
+  CONNECTED = "CONNECTED",                // data = { address: string }
+  DISCONNECTED = "DISCONNECTED"           // data = { reason?: string }
+}
+```
+
+### Event Data Structure
+
+```typescript
+// NETWORK_CHANGED event data
+interface NetworkChangeEventData {
+  chainId: number;
+  apiUrls: Record<string, SmartDappApiUrl>;  // API URLs for the new network
+}
+
+// CONNECTED event data  
+interface ConnectedEventData {
+  address: string;
+}
+
+// DISCONNECTED event data
+interface DisconnectedEventData {
+  reason?: string;
+}
+```
+
+## Architecture
 
 SmartDapp follows a service-oriented architecture with clear separation of concerns:
 
@@ -226,25 +289,34 @@ SmartDapp
 - **StorageService**: Provides network-aware storage with search capabilities
 - **LocalStorageAdapter**: Implements storage interface (can be swapped for other storage backends)
 
-## 📚 API Reference
+## API Reference
 
 ### Core Methods
 
-#### Wallet & Network
+#### Event-Driven State Management
 ```typescript
-// Connection
+// Subscribe to all state changes - this is the ONLY way to get state updates
+smartDapp.subscribeToChanges(callback)
+
+// Available events:
+// - "CONNECTED": Wallet connected (data = { address: string })
+// - "DISCONNECTED": Wallet disconnected (data = { reason?: string })
+// - "NETWORK_CHANGED": Network switched (data = { chainId: number, apiUrls: Record<string, SmartDappApiUrl> })
+```
+
+#### Wallet & Network Actions
+```typescript
+// Connection actions
 await smartDapp.openAppKitModal()
 await smartDapp.closeAppKitModal()
-await smartDapp.getAddress()
 
 // Network management
-smartDapp.getNetworkId()
-smartDapp.getCurrentCustomNetworkId()
 await smartDapp.selectNetwork(chainId)
-smartDapp.getNetworks()
 
-// Subscriptions
-smartDapp.subscribeToChanges(callback)
+// Configuration access (read-only, not reactive)
+smartDapp.getCurrentCustomNetworkId()
+smartDapp.getNetworks()
+smartDapp.getApiUrl(name)
 ```
 
 #### Contract Interactions
@@ -273,11 +345,44 @@ await smartDapp.findContentByKeyAndQuery(key, query)
 smartDapp.getApiUrl(name)
 ```
 
-## 🎯 Best Practices
+## Best Practices
 
-### 1. **Configuration Management**
+### Event-Driven State Management
 ```typescript
-// ✅ Good: Centralized configuration
+// Good: Subscribe to events and manage state reactively
+let currentNetwork: number | null = null;
+let currentAddress: string | null = null;
+let currentApiUrls: Record<string, SmartDappApiUrl> = {};
+
+smartDapp.subscribeToChanges((notification, data) => {
+  switch (notification) {
+    case "CONNECTED":
+      currentAddress = data.address;
+      updateUI();
+      break;
+    case "NETWORK_CHANGED":
+      currentNetwork = data.chainId;
+      currentApiUrls = data.apiUrls; // Get API URLs for the new network
+      updateUI();
+      // Now you can use currentApiUrls.backend.url, currentApiUrls.markets.url, etc.
+      break;
+    case "DISCONNECTED":
+      currentAddress = null;
+      currentNetwork = null;
+      currentApiUrls = {};
+      updateUI();
+      break;
+  }
+});
+
+// Bad: Trying to use getters (they don't exist!)
+// const network = smartDapp.getNetworkId(); // This method doesn't exist!
+// const address = smartDapp.getAddress(); // This method doesn't exist!
+```
+
+### Configuration Management
+```typescript
+// Good: Centralized configuration
 const config = {
   networks: {
     1: { /* mainnet config */ },
@@ -289,14 +394,14 @@ const config = {
   }
 };
 
-// ❌ Bad: Hardcoded values scattered throughout code
+// Bad: Hardcoded values scattered throughout code
 const mainnetApi = "https://api-mainnet.com";
 const polygonApi = "https://api-polygon.com";
 ```
 
-### 2. **Error Handling**
+### Error Handling
 ```typescript
-// ✅ Good: Proper error handling
+// Good: Proper error handling
 try {
   const tx = await smartDapp.sendTransaction("Router", "swapExactETHForTokens", args, value);
   console.log("Transaction successful:", tx.hash);
@@ -308,37 +413,57 @@ try {
   }
 }
 
-// ❌ Bad: No error handling
+// Bad: No error handling
 const tx = await smartDapp.sendTransaction("Router", "swapExactETHForTokens", args, value);
 ```
 
-### 3. **Network Awareness**
+### Network Awareness
 ```typescript
-// ✅ Good: Always check current network
-const currentNetwork = smartDapp.getNetworkId();
-if (currentNetwork === 1) {
-  // Ethereum mainnet logic
-} else if (currentNetwork === 137) {
-  // Polygon logic
+// Good: Track network state and API URLs through events
+let currentNetwork: number | null = null;
+let currentApiUrls: Record<string, SmartDappApiUrl> = {};
+
+smartDapp.subscribeToChanges((notification, data) => {
+  if (notification === "NETWORK_CHANGED") {
+    currentNetwork = data.chainId;
+    currentApiUrls = data.apiUrls;
+    handleNetworkChange(currentNetwork, currentApiUrls);
+  }
+});
+
+function handleNetworkChange(networkId: number, apiUrls: Record<string, SmartDappApiUrl>) {
+  if (networkId === 1) {
+    // Ethereum mainnet logic
+    console.log("Using mainnet API:", apiUrls.backend.url);
+  } else if (networkId === 137) {
+    // Polygon logic  
+    console.log("Using Polygon API:", apiUrls.backend.url);
+  }
+  
+  // Use the correct API URLs for the current network
+  fetch(`${apiUrls.backend.url}/user-data`)
+    .then(response => response.json())
+    .then(data => console.log(data));
 }
 
-// ❌ Bad: Assuming network
+// Bad: Assuming network or trying to use getters
 const apiUrl = "https://api-mainnet.com"; // Always mainnet!
+// const network = smartDapp.getNetworkId(); // This method doesn't exist!
 ```
 
-### 4. **Storage Patterns**
+### Storage Patterns
 ```typescript
-// ✅ Good: Use network-aware storage
+// Good: Use network-aware storage
 smartDapp.storeMetadata("userPreferences", {
   theme: "dark",
   language: "en"
 });
 
-// ❌ Bad: Global storage without network context
+// Bad: Global storage without network context
 localStorage.setItem("userPreferences", JSON.stringify(prefs));
 ```
 
-## 🔧 Advanced Usage
+## Advanced Usage
 
 ### Custom Storage Adapter
 
@@ -381,9 +506,9 @@ const tx = await smartDapp.sendTransaction(
 );
 ```
 
-## 🤝 Contributing
+## Contributing
 
-Just make a PR!
+We welcome contributions! Please see our [Contributing Guide](CONTRIBUTING.md) for details.
 
 ### Development Setup
 
@@ -394,6 +519,16 @@ npm install
 npm run dev
 ```
 
-## 📄 License
+## License
 
-MIT License - see [LICENSE](LICENSE) file for details.
+ISC License - see [LICENSE](LICENSE) file for details.
+
+## Support
+
+- **Issues**: [GitHub Issues](https://github.com/saefstroem/SmartDapp/issues)
+- **Discussions**: [GitHub Discussions](https://github.com/saefstroem/SmartDapp/discussions)
+- **Documentation**: [Full API Docs](https://github.com/saefstroem/SmartDapp/wiki)
+
+---
+
+**SmartDapp** - Event-driven Web3 development that prevents state management nightmares.

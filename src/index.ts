@@ -12,7 +12,7 @@ export interface SmartDappApiUrl {
     // The production URL for this API
     url: string;
     // The local port for this API
-    port?:number;
+    port?: number;
 }
 
 export interface SmartDappConfig {
@@ -39,7 +39,7 @@ export class SmartDapp {
         this.config = config;
 
 
-        this.web3InteropService = new Web3InteropService(this.config.networks, {
+        this.web3InteropService = new Web3InteropService(this.config.apiUrls,this.config.networks, {
             appName: config.appName,
             appDescription: config.appDescription,
             appUrl: config.appUrl,
@@ -54,17 +54,11 @@ export class SmartDapp {
     }
 
     /**
-     * Get the current network ID synchronously
-     */
-    public getNetworkId(): number {
-        return this.web3InteropService.getNetworkId();
-    }
-
-    /**
      * Get the custom network ID (e.g., 'kasplex-mainnet', 'kasplex-testnet')
      */
     public getCurrentCustomNetworkId(): string {
-        const networkId = this.getNetworkId();
+        const networkId = this.web3InteropService.networkId;
+        if (!networkId) throw new Error("No network selected");
         if (!this.config.networks[networkId]) throw new Error(`No configuration found for network ID: ${networkId}`);
         return this.config.networks[networkId].customNetworkId;
     }
@@ -76,18 +70,9 @@ export class SmartDapp {
         return this.web3InteropService.getAvailableNetworks();
     }
 
-    /**
-     * Get API URLs for the current network
-     */
-    public getApiUrl(name: string): string {
-        const chainId = this.getNetworkId();
-        if (!this.config.apiUrls[chainId][name]) throw new Error(`No API URL found for name: ${name} on network ID: ${chainId}`);
-        return this.config.apiUrls[chainId][name].url;
-    }
-
 
     /**
-     * Subscribe to network changes
+     * Subscribe to changes in the SmartDapp. This is the only way to retrieve updates/information.
      */
     public subscribeToChanges(callback: (notification: Web3InteropNotification) => void): void {
         this.web3InteropService.subscribeToChanges(callback);
@@ -98,14 +83,6 @@ export class SmartDapp {
      */
     public async selectNetwork(chainId: number): Promise<void> {
         return this.web3InteropService.selectNetwork(chainId);
-    }
-
-    /**
-     * Get the currently connected wallet address
-     */
-    public async getAddress(): Promise<string> {
-        const signer = await this.web3InteropService.getSigner();
-        return signer.getAddress();
     }
 
     /**

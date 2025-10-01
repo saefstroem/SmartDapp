@@ -4,6 +4,7 @@ import { EthersAdapter } from "@reown/appkit-adapter-ethers";
 import { AppKitNetwork } from "@reown/appkit/networks";
 import { JsonRpcSigner } from "ethers";
 import { SmartDappContract } from "./contract";
+import { SmartDappApiUrl } from "..";
 
 
 export interface SmartDappNetworkConfiguration {
@@ -23,21 +24,31 @@ export interface AppkitConfiguration {
 
 export enum Web3InteropNotification {
     NETWORK_CHANGED = "NETWORK_CHANGED",
-    ACCOUNT_CHANGED = "ACCOUNT_CHANGED",
     CONNECTED = "CONNECTED",
     DISCONNECTED = "DISCONNECTED",
 }
+
+interface NetworkChangeEventData {
+    chainId: Number,
+    apiUrls: Record<any, SmartDappApiUrl>
+}
+
+
+interface ConnectedEventData {
+    address: string,
+}
+
+interface DisconnectedEventData {
+    reason?: string
+}
+
+export type SmartDappEventData = NetworkChangeEventData | ConnectedEventData | DisconnectedEventData;
 
 export class Web3InteropService {
     /**
      * The appkit instance that manages the web3 connection
      */
     private appKit: AppKit;
-
-    /**
-     * A read-only provider for the currently selected network
-     */
-    private readProvider: JsonRpcProvider;
 
     /**
      * Subscribers to web3 interop changes
@@ -49,8 +60,17 @@ export class Web3InteropService {
      */
     private developerMode = false;
 
+    /**
+     * Current network ID
+     */
+    public networkId: number | null = null;
 
-    constructor(networksMap: Record<any, SmartDappNetworkConfiguration>, appkitConfig: AppkitConfiguration, developerMode: boolean = false) {
+    /**
+     * apiUrls mapped by network ID
+     */
+    private apiUrls: Record<number, Record<any, SmartDappApiUrl>>
+
+    constructor(apiUrls: Record<number, Record<any, SmartDappApiUrl>>, networksMap: Record<any, SmartDappNetworkConfiguration>, appkitConfig: AppkitConfiguration, developerMode: boolean = false) {
         this.appKit = createAppKit({
             adapters: [new EthersAdapter()],
             networks: Object.values(networksMap).map(n => n.appKit) as [AppKitNetwork, ...AppKitNetwork[]],
@@ -72,21 +92,39 @@ export class Web3InteropService {
         });
         const networks = this.appKit.getCaipNetworks("eip155");
         if (networks.length == 0) throw new Error("No networks configured in AppKit");
-        this.readProvider = new JsonRpcProvider(networks[0].rpcUrls.default.http[0]);
         this.appKit.subscribeEvents(this.handleAppKitEvent)
         this.developerMode = developerMode;
+        this.apiUrls = apiUrls;
     }
 
     private handleAppKitEvent(event: EventsControllerState) {
         switch (event.data.event) {
             case "CONNECT_SUCCESS":
-                this.notifySubscribers(Web3InteropNotification.CONNECTED);
+                this.getSigner().then(signer => {
+                    this.notifySubscribers(Web3InteropNotification.CONNECTED, {
+                        address: signer.address
+                    });
+                });
                 break;
             case "DISCONNECT_SUCCESS":
-                this.notifySubscribers(Web3InteropNotification.DISCONNECTED);
+                this.notifySubscribers(Web3InteropNotification.DISCONNECTED, {
+                    reason: "Disconnected"
+                });
                 break;
             case "SWITCH_NETWORK":
-                this.notifySubscribers(Web3InteropNotification.NETWORK_CHANGED, this.getNetworkId());
+                const isolatedChainId = event.data.properties.network.replace("eip155:", "");
+                this.networkId = Number(isolatedChainId)
+                this.notifySubscribers(Web3InteropNotification.NETWORK_CHANGED, {
+                    chainId: this.networkId,
+                    apiUrls: this.apiUrls[this.networkId] || {}
+                });
+                break;
+            case "SELECT_WALLET":
+                this.getSigner().then(signer => {
+                    this.notifySubscribers(Web3InteropNotification.CONNECTED, {
+                        address: signer.address
+                    });
+                });
                 break;
             default:
                 break;
@@ -98,7 +136,7 @@ export class Web3InteropService {
      * @param notification The notification type
      * @param data Optional data to send with the notification
      */
-    private notifySubscribers(notification: Web3InteropNotification, data?: any) {
+    private notifySubscribers(notification: Web3InteropNotification, data: SmartDappEventData) {
         this.subscribers.forEach(callback => {
             try {
                 callback(notification, data);
@@ -153,13 +191,6 @@ export class Web3InteropService {
                 }
             }
         });
-    }
-
-    /**
-     * Get the current network ID synchronously
-     */
-    public getNetworkId(): number {
-        return Number(this.readProvider._network.chainId);
     }
 
     /**

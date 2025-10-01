@@ -19,7 +19,8 @@ export class StorageService {
      * Store metadata namespaced by network ID
      */
     public storeMetadata<Storable extends Object>(key: string, value: Storable): void {
-        const networkId = this.web3InteropService.getNetworkId();
+        const networkId = this.web3InteropService.networkId;
+        if (!networkId) throw new Error("No network selected");
         const storageKey = `metadata_${networkId}_${key}`;
         this.storage.setItem(storageKey, value);
     }
@@ -28,7 +29,8 @@ export class StorageService {
      * Retrieve metadata namespaced by network ID
      */
     public retrieveMetadata<Storable>(key: string): Storable {
-        const networkId = this.web3InteropService.getNetworkId();
+        const networkId = this.web3InteropService.networkId;
+        if (!networkId) throw new Error("No network selected");
         const storageKey = `metadata_${networkId}_${key}`;
         const value = this.storage.getItem(storageKey);
         if (value instanceof Object) {
