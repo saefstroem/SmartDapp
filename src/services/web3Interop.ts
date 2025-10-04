@@ -7,10 +7,11 @@ import { SmartDappContract } from "./contract";
 import { SmartDappApiUrl } from "..";
 
 
-export interface SmartDappNetworkConfiguration {
+export interface SmartDappNetworkConfiguration<ApiUrlDescriptor extends Record<any, SmartDappApiUrl> = Record<any, SmartDappApiUrl>> {
     appKit: AppKitNetwork;
     contracts: Record<any, SmartDappContract>;
     metadata: Record<any, any>;
+    apiUrls: ApiUrlDescriptor;
 }
 
 export interface AppkitConfiguration {
@@ -34,7 +35,7 @@ export type SmartDappEvent = {
 } | {
     event: 'NETWORK_CHANGED';
     properties: {
-        chainId: number;
+        chainId: string;
         apiUrls: Record<string, SmartDappApiUrl>;
     };
 };
@@ -53,19 +54,18 @@ export class Web3InteropService {
     /**
      * Used to signal whether or not testnet networks should be available for selection
      */
-    private developerMode = false;
+    private onlyMainnet = false;
 
     /**
      * Current network ID
      */
-    public networkId: number | null = null;
-
+    public networkId: string | null = null;
     /**
      * apiUrls mapped by network ID
      */
-    private apiUrls: Record<number, Record<any, SmartDappApiUrl>>
+    private apiUrls: Record<string, Record<any, SmartDappApiUrl>>
 
-    constructor(apiUrls: Record<number, Record<any, SmartDappApiUrl>>, networksMap: Record<any, SmartDappNetworkConfiguration>, appkitConfig: AppkitConfiguration, developerMode: boolean = false) {
+    constructor(networksMap: Record<any, SmartDappNetworkConfiguration>, appkitConfig: AppkitConfiguration, onlyMainnet: boolean = false) {
         this.appKit = createAppKit({
             adapters: [new EthersAdapter()],
             networks: Object.values(networksMap).map(n => n.appKit) as [AppKitNetwork, ...AppKitNetwork[]],
@@ -88,8 +88,8 @@ export class Web3InteropService {
         const networks = this.appKit.getCaipNetworks("eip155");
         if (networks.length == 0) throw new Error("No networks configured in AppKit");
         this.appKit.subscribeEvents(this.handleAppKitEvent)
-        this.developerMode = developerMode;
-        this.apiUrls = apiUrls;
+        this.onlyMainnet = onlyMainnet;
+        this.apiUrls = Object.fromEntries(Object.entries(networksMap).map(([networkId, config]) => [Number(networkId), config.apiUrls]));
     }
 
     private handleAppKitEvent(event: EventsControllerState) {
@@ -114,7 +114,7 @@ export class Web3InteropService {
                 break;
             case "SWITCH_NETWORK":
                 const isolatedChainId = event.data.properties.network.replace("eip155:", "");
-                this.networkId = Number(isolatedChainId)
+                this.networkId = isolatedChainId
                 this.notifySubscribers({
                     event: 'NETWORK_CHANGED',
                     properties: {
@@ -212,7 +212,7 @@ export class Web3InteropService {
      */
     public getAvailableNetworks(): AppKitNetwork[] {
         const networks = this.appKit.getCaipNetworks("eip155");
-        if (this.developerMode) {
+        if (!this.onlyMainnet) {
             return networks;
         } else {
             return networks.filter(n => !n.testnet);
@@ -224,13 +224,14 @@ export class Web3InteropService {
      * @param chainId The chain ID to select
      * @returns A promise that resolves when the network has been changed.
      */
-    public async selectNetwork(chainId: number): Promise<void> {
+    public async selectNetwork(chainId: string): Promise<void> {
         return new Promise<void>(async (resolve, reject) => {
             try {
                 const networks = this.appKit.getCaipNetworks("eip155");
-                const network = networks.find(n => Number(n.id) === chainId);
+                console.log("networks", networks);
+                const network = networks.find(n => n.id === chainId);
                 if (!network) throw new Error(`Network ${chainId} not found in AppKit configuration`);
-                if (!this.developerMode && network.testnet) throw new Error(`Network ${chainId} is a testnet and developer mode is disabled`);
+                if (this.onlyMainnet && network.testnet) throw new Error(`Network ${chainId} is a testnet and only mainnet mode is enabled`);
                 await this.changeNetwork(network)
                 return resolve();
             } catch (err) {

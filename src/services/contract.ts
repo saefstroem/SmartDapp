@@ -108,7 +108,7 @@ export class ContractService {
 
             // For read calls, we need to create a provider from the current network
             const networks = this.web3InteropService.getAvailableNetworks();
-            const currentNetwork = networks.find(n => Number(n.id) === networkId);
+            const currentNetwork = networks.find(n => n.id === networkId);
             if (!currentNetwork) {
                 throw new Error(`Network ${networkId} not found`);
             }
@@ -156,7 +156,7 @@ export class ContractService {
 
         // For encoding, we need to create a provider from the current network
         const networks = this.web3InteropService.getAvailableNetworks();
-        const currentNetwork = networks.find(n => Number(n.id) === networkId);
+        const currentNetwork = networks.find(n => n.id === networkId);
         if (!currentNetwork) {
             throw new Error(`Network ${networkId} not found`);
         }
@@ -168,6 +168,16 @@ export class ContractService {
         return contract.interface.encodeFunctionData(methodName, args);
     }
 
+    /**
+     * Sign an arbitrary message
+     * @param message 
+     * @returns Signed message
+     */
+    public async signMessage(message: string): Promise<string> {
+        const signer = await this.web3InteropService.getSigner();
+        return signer.signMessage(message);
+    }
+
 
     private getAbi(abiName: string): Object[] {
         const abi = this.abis[abiName];
@@ -177,7 +187,7 @@ export class ContractService {
         return abi;
     }
 
-    private getContractInfo(networkId: number, contractName: string): SmartDappContract {
+    public getContractInfo(networkId: string, contractName: string): SmartDappContract {
         const networkContracts = this.contracts[networkId.toString()];
         if (!networkContracts) {
             throw new Error(`No contracts found for network ID: ${networkId}`);

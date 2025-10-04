@@ -15,18 +15,46 @@ export interface SmartDappApiUrl {
     port?: number;
 }
 
+/**
+ * Configuration for SmartDapp. This configuration expects a default AppKit configuration and custom
+ * abis for the used contracts and networks. Each network should be keyed by a unique identifier, recommended to be
+ * the chain ID.
+ */
 export interface SmartDappConfig<ApiUrlDescriptor extends Record<any, SmartDappApiUrl> = Record<any, SmartDappApiUrl>> {
     projectId: string;
     appName: string;
     appDescription: string;
     appUrl: string;
     appIcon: string;
-    abis: Record<any, Object[]>;
-    networks: Record<any, SmartDappNetworkConfiguration>;
-    apiUrls: Record<number,ApiUrlDescriptor>;
+    abis: Record<string, Object[]>;
+    networks: Record<string, SmartDappNetworkConfiguration<ApiUrlDescriptor>>;
     storageAdapter?: any;
 }
 
+/**
+ * Representation of a restricted network
+ * This is a simplified version of the AppKitNetwork to ensure minimal required properties.
+ * and to reduce the chance of misconfiguration.
+ */
+export interface SmartDappNetwork {
+    id: string;
+    name: string;
+    nativeCurrency: {
+        symbol: string;
+        name: string;
+        decimals: number;
+    };
+    testnet: boolean;
+}
+
+/**
+ * Main SmartDapp class
+ * 
+ * SmartDapp is a comprehensive library for building decentralized applications (dApps) with ease.
+ * It provides seamless integration with multiple blockchain networks, wallet connections, contract interactions, and metadata storage.
+ * It is designed to be as restrictive as possible in order to minimize the errors that incorrect state management
+ * can cause in a dApp.
+ */
 export class SmartDapp {
     private config: SmartDappConfig;
 
@@ -35,20 +63,20 @@ export class SmartDapp {
     private contractService: ContractService;
     private storageService: StorageService;
 
-    constructor(config: SmartDappConfig, developerMode: boolean = false) {
+    constructor(config: SmartDappConfig, onlyMainnet: boolean = false) {
         this.config = config;
 
-
-        this.web3InteropService = new Web3InteropService(this.config.apiUrls,this.config.networks, {
+        this.web3InteropService = new Web3InteropService(this.config.networks, {
             appName: config.appName,
             appDescription: config.appDescription,
             appUrl: config.appUrl,
             appIcon: config.appIcon,
             projectId: config.projectId
-        }, developerMode);
+        }, onlyMainnet);
 
         this.contractService = new ContractService(this.config.networks, this.web3InteropService, this.config.abis);
 
+        // At the moment no other storage adapter is provided, hence we just use the local storage.
         const storage = config.storageAdapter || new LocalStorageAdapter();
         this.storageService = new StorageService(storage, this.web3InteropService);
     }
@@ -56,11 +84,25 @@ export class SmartDapp {
     /**
      * Get all configured networks
      */
-    public getNetworks(): AppKitNetwork[] {
-        return this.web3InteropService.getAvailableNetworks();
+    public getNetworks(): SmartDappNetwork[] {
+        const rawNetworks = this.web3InteropService.getAvailableNetworks();
+        return rawNetworks.map(n => ({
+            id: n.id.toString(),
+            name: n.name,
+            nativeCurrency: n.nativeCurrency,
+            testnet: n.testnet || false
+        }));
     }
 
-
+    /**
+     * Get contract address for a contract name
+     */
+    public getContractAddress(contractName: string): string | null {
+        const networkId = this.web3InteropService.networkId;
+        if (!networkId) throw new Error("No network selected");
+        const contractInfo = this.contractService.getContractInfo(networkId, contractName);
+        return contractInfo.address || null;
+    }
     /**
      * Subscribe to changes in the SmartDapp. This is the only way to retrieve updates/information.
      */
@@ -71,7 +113,7 @@ export class SmartDapp {
     /**
      * Select a network by chain ID
      */
-    public async selectNetwork(chainId: number): Promise<void> {
+    public async selectNetwork(chainId: string): Promise<void> {
         return this.web3InteropService.selectNetwork(chainId);
     }
 
@@ -92,14 +134,14 @@ export class SmartDapp {
     /**
      * Store metadata namespaced by network ID
      */
-    public storeMetadata<Storable extends Object>(key: string, value: Storable): void {
+    public storeMetadata(key: string, value: string): void {
         return this.storageService.storeMetadata(key, value);
     }
 
     /**
      * Retrieve metadata namespaced by network ID
      */
-    public retrieveMetadata<Storable extends Object>(key: string): Storable | null {
+    public retrieveMetadata(key: string): string | null {
         return this.storageService.retrieveMetadata(key);
     }
 
@@ -130,7 +172,7 @@ export class SmartDapp {
      *   "MyRouter"
      * );
      */
-    public async findContentByKeyAndQuery<T extends Record<string, any>>(
+    public async findContentByKeyAndQuery<T>(
         key: string,
         query: string,
     ): Promise<T> {
@@ -194,6 +236,17 @@ export class SmartDapp {
     ): Promise<string> {
         return this.contractService.encodeFunctionData(contractNameOrAbiName, methodName, args, abiName);
     }
+
+    /**
+     * Sign an arbitrary message
+     * @param message The message to sign
+     * @returns The signed message
+     */
+    public async signMessage(message: string): Promise<string> {
+        return this.contractService.signMessage(message);
+    }
+
+
 
 }
 

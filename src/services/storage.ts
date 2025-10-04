@@ -1,7 +1,7 @@
 import { Web3InteropService } from "./web3Interop";
 
 export interface StorageAdapter {
-    getItem<Storable extends Object>(key: string): Storable | null;
+    getItem<Storable extends Object>(key: string): string | null;
     setItem<Storable extends Object>(key: string, value: Storable): void;
     removeItem(key: string): void;
 }
@@ -18,7 +18,7 @@ export class StorageService {
     /**
      * Store metadata namespaced by network ID
      */
-    public storeMetadata<Storable extends Object>(key: string, value: Storable): void {
+    public storeMetadata(key: string, value: string): void {
         const networkId = this.web3InteropService.networkId;
         if (!networkId) throw new Error("No network selected");
         const storageKey = `metadata_${networkId}_${key}`;
@@ -28,13 +28,13 @@ export class StorageService {
     /**
      * Retrieve metadata namespaced by network ID
      */
-    public retrieveMetadata<Storable>(key: string): Storable {
+    public retrieveMetadata(key: string): string {
         const networkId = this.web3InteropService.networkId;
         if (!networkId) throw new Error("No network selected");
         const storageKey = `metadata_${networkId}_${key}`;
         const value = this.storage.getItem(storageKey);
-        if (value instanceof Object) {
-            return (value as Storable);
+        if (value) {
+            return (value);
         }
         throw Error(`No metadata found for key: ${key}`);
     }
@@ -53,12 +53,21 @@ export class StorageService {
      * @param query The search query (case-insensitive)
      * @returns The first matching object found
      */
-    public searchInObjects<T extends Record<string, any>>(
-        objects: T,
+    public searchInObjects<T>(
+        objects: Awaited<T>,
         query: string
     ): T | null {
         const lowerQuery = query.toLowerCase();
-
+        // Ensure objects is an array or object
+        if (!objects || (typeof objects !== 'object')) {
+            // But if its a string we should check it directly
+            if(typeof objects === 'string') {
+                if (objects.includes(query)) {
+                    return objects as T;
+                }
+            }
+            return null;
+        }
         for (const obj of Object.values(objects)) {
             // Check all fields in the object
             for (const [key, value] of Object.entries(obj)) {
@@ -105,24 +114,23 @@ export class StorageService {
      *   "MyRouter"
      * );
      */
-    public async findContentByKeyAndQuery<T extends Record<string, any>>(
+    public async findContentByKeyAndQuery<T>(
         key: string,
         query: string,
     ): Promise<T> {
         // Check stored metadata
-        let storedItems: T = {} as T;
-        try {
-            const metadataJson = await this.retrieveMetadata<T>(key);
-            storedItems = metadataJson;
-
-        } catch (error) {
-            console.error(`Failed to parse metadata for key "${key}":`, error);
-        }
-
-        if (storedItems.length === 0) {
-            throw new Error(`No data found for metadata key: ${key}`);
-        }
-
+        let retrieveItems: () => Promise<T> = async () => {
+            const metadataJson = await this.retrieveMetadata(key);
+            try {
+                return JSON.parse(metadataJson) as T;
+            }
+            catch (e) {
+                console.error(`Failed to parse JSON for key "${key}":`, e);
+                return metadataJson as T;
+            }
+        };
+        let storedItems=await retrieveItems();
+        
         // Search through all items
         const found = this.searchInObjects(storedItems, query);
 
